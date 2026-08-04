@@ -170,6 +170,7 @@ class ServiceRoleUserAssignmentSerializer(BaseAssignmentSerializer):
     class Meta:
         model = RoleUserAssignment
         fields = assignment_common_fields + ('user_ansible_id',)
+        validators = []
 
 
 class ServiceRoleTeamAssignmentSerializer(BaseAssignmentSerializer):
@@ -179,3 +180,4 @@ class ServiceRoleTeamAssignmentSerializer(BaseAssignmentSerializer):
     class Meta:
         model = RoleTeamAssignment
         fields = assignment_common_fields + ('team_ansible_id',)
+        validators = []

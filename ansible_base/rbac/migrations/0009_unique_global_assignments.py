@@ -46,28 +46,39 @@ def deduplicate_global_assignments(apps, schema_editor):
             logger.info('Deleted %d duplicate global %s entries', total_deleted, model_name)
 
 
+def _drop_invalid_index(schema_editor, index_name):
+    """Drop an index if it exists and is marked INVALID from a previous failed CONCURRENTLY build."""
+    schema_editor.execute(
+        "DROP INDEX IF EXISTS %s" % index_name
+    )
+
+
 def create_unique_indexes(apps, schema_editor):
     deduplicate_global_assignments(apps, schema_editor)
 
     if schema_editor.connection.vendor == 'postgresql':
+        _drop_invalid_index(schema_editor, '"unique_global_user_assignment"')
+        _drop_invalid_index(schema_editor, '"unique_global_team_assignment"')
         schema_editor.execute(
-            'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "unique_global_user_assignment"'
+            'CREATE UNIQUE INDEX CONCURRENTLY "unique_global_user_assignment"'
             ' ON "dab_rbac_roleuserassignment" ("user_id", "role_definition_id")'
             ' WHERE "object_role_id" IS NULL'
         )
         schema_editor.execute(
-            'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "unique_global_team_assignment"'
+            'CREATE UNIQUE INDEX CONCURRENTLY "unique_global_team_assignment"'
             ' ON "dab_rbac_roleteamassignment" ("team_id", "role_definition_id")'
             ' WHERE "object_role_id" IS NULL'
         )
     else:
+        schema_editor.execute('DROP INDEX IF EXISTS "unique_global_user_assignment"')
+        schema_editor.execute('DROP INDEX IF EXISTS "unique_global_team_assignment"')
         schema_editor.execute(
-            'CREATE UNIQUE INDEX IF NOT EXISTS "unique_global_user_assignment"'
+            'CREATE UNIQUE INDEX "unique_global_user_assignment"'
             ' ON "dab_rbac_roleuserassignment" ("user_id", "role_definition_id")'
             ' WHERE "object_role_id" IS NULL'
         )
         schema_editor.execute(
-            'CREATE UNIQUE INDEX IF NOT EXISTS "unique_global_team_assignment"'
+            'CREATE UNIQUE INDEX "unique_global_team_assignment"'
             ' ON "dab_rbac_roleteamassignment" ("team_id", "role_definition_id")'
             ' WHERE "object_role_id" IS NULL'
         )

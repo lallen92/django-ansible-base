@@ -15,10 +15,10 @@ class TestGlobalUserAssignmentConstraint:
         assert global_user_assignment.pk == assignment2.pk
         assert RoleUserAssignment.objects.filter(user=rando, role_definition=global_inv_rd, object_role__isnull=True).count() == 1
 
+    @pytest.mark.xfail(raises=IntegrityError, strict=True)
     def test_duplicate_prevented_by_constraint(self, rando, global_inv_rd, global_user_assignment):
-        with pytest.raises(IntegrityError):
-            with transaction.atomic():
-                RoleUserAssignment.objects.create(user=rando, role_definition=global_inv_rd, object_role=None)
+        with transaction.atomic():
+            RoleUserAssignment.objects.create(user=rando, role_definition=global_inv_rd, object_role=None)
 
     def test_object_level_assignments_unaffected(self, rando, inv_rd, inventory, organization):
         inv2 = Inventory.objects.create(name='inv2', organization=organization)
@@ -44,7 +44,7 @@ class TestGlobalTeamAssignmentConstraint:
         assert global_team_assignment.pk == assignment2.pk
         assert RoleTeamAssignment.objects.filter(team=team, role_definition=global_inv_rd, object_role__isnull=True).count() == 1
 
+    @pytest.mark.xfail(raises=IntegrityError, strict=True)
     def test_duplicate_prevented_by_constraint(self, team, global_inv_rd, global_team_assignment):
-        with pytest.raises(IntegrityError):
-            with transaction.atomic():
-                RoleTeamAssignment.objects.create(team=team, role_definition=global_inv_rd, object_role=None)
+        with transaction.atomic():
+            RoleTeamAssignment.objects.create(team=team, role_definition=global_inv_rd, object_role=None)

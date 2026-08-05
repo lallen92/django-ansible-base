@@ -8,8 +8,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('dab_rbac', '0009_unique_global_assignments'),
-        ('test_app', '0018_alter_animal_created_alter_animal_created_by_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        migrations.swappable_dependency(settings.ANSIBLE_BASE_TEAM_MODEL),
     ]
 
     operations = [

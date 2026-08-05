@@ -4,7 +4,8 @@ Add partial unique constraints to prevent duplicate global role assignments.
 Uses SeparateDatabaseAndState because Django's AddConstraint generates
 CREATE INDEX (blocking writes). We use CREATE INDEX CONCURRENTLY on PostgreSQL
 to avoid locking the table, which requires atomic = False and raw SQL.
-IF NOT EXISTS makes the migration safe to re-run if it fails partway through.
+Indexes are dropped before creation so the migration is safe to re-run
+if it fails partway through (e.g. after only one index was created).
 SQLite (CI-only) uses plain CREATE INDEX since it has no CONCURRENTLY support.
 """
 
@@ -46,8 +47,8 @@ def deduplicate_global_assignments(apps, schema_editor):
             logger.info('Deleted %d duplicate global %s entries', total_deleted, model_name)
 
 
-def _drop_invalid_index(schema_editor, index_name):
-    """Drop an index if it exists and is marked INVALID from a previous failed CONCURRENTLY build."""
+def _drop_index_if_exists(schema_editor, index_name):
+    """Drop an index if it exists, so CREATE INDEX can be re-run safely."""
     schema_editor.execute(
         "DROP INDEX IF EXISTS %s" % index_name
     )
@@ -57,8 +58,8 @@ def create_unique_indexes(apps, schema_editor):
     deduplicate_global_assignments(apps, schema_editor)
 
     if schema_editor.connection.vendor == 'postgresql':
-        _drop_invalid_index(schema_editor, '"unique_global_user_assignment"')
-        _drop_invalid_index(schema_editor, '"unique_global_team_assignment"')
+        _drop_index_if_exists(schema_editor, '"unique_global_user_assignment"')
+        _drop_index_if_exists(schema_editor, '"unique_global_team_assignment"')
         schema_editor.execute(
             'CREATE UNIQUE INDEX CONCURRENTLY "unique_global_user_assignment"'
             ' ON "dab_rbac_roleuserassignment" ("user_id", "role_definition_id")'

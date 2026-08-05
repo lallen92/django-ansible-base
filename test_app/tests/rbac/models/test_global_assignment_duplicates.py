@@ -15,7 +15,7 @@ class TestGlobalUserAssignmentConstraint:
         assert global_user_assignment.pk == assignment2.pk
         assert RoleUserAssignment.objects.filter(user=rando, role_definition=global_inv_rd, object_role__isnull=True).count() == 1
 
-    @pytest.mark.xfail(raises=IntegrityError, strict=True)
+    @pytest.mark.xfail(raises=IntegrityError, strict=True, reason="DB constraint must reject duplicate global user assignment")
     def test_duplicate_prevented_by_constraint(self, rando, global_inv_rd, global_user_assignment):
         with transaction.atomic():
             RoleUserAssignment.objects.create(user=rando, role_definition=global_inv_rd, object_role=None)
@@ -44,7 +44,7 @@ class TestGlobalTeamAssignmentConstraint:
         assert global_team_assignment.pk == assignment2.pk
         assert RoleTeamAssignment.objects.filter(team=team, role_definition=global_inv_rd, object_role__isnull=True).count() == 1
 
-    @pytest.mark.xfail(raises=IntegrityError, strict=True)
+    @pytest.mark.xfail(raises=IntegrityError, strict=True, reason="DB constraint must reject duplicate global team assignment")
     def test_duplicate_prevented_by_constraint(self, team, global_inv_rd, global_team_assignment):
         with transaction.atomic():
             RoleTeamAssignment.objects.create(team=team, role_definition=global_inv_rd, object_role=None)

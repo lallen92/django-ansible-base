@@ -1,12 +1,11 @@
 """
-Add partial unique constraints to prevent duplicate global role assignments.
+Data migration: remove duplicate global role assignments.
 
-Uses SeparateDatabaseAndState because Django's AddConstraint generates
-CREATE INDEX (blocking writes). We use CREATE INDEX CONCURRENTLY on PostgreSQL
-to avoid locking the table, which requires atomic = False and raw SQL.
-Indexes are dropped before creation so the migration is safe to re-run
-if it fails partway through (e.g. after only one index was created).
-SQLite (CI-only) uses plain CREATE INDEX since it has no CONCURRENTLY support.
+For each (actor, role_definition) pair where object_role IS NULL,
+keeps the oldest row (lowest pk) and deletes the rest.
+Safe to re-run — a second run is a no-op if no duplicates exist.
+
+Migration 0010 adds the UniqueConstraint that prevents future duplicates.
 """
 
 import logging
@@ -47,83 +46,12 @@ def deduplicate_global_assignments(apps, schema_editor):
             logger.info('Deleted %d duplicate global %s entries', total_deleted, model_name)
 
 
-def _drop_index_if_exists(schema_editor, index_name):
-    """Drop an index if it exists, so CREATE INDEX can be re-run safely."""
-    schema_editor.execute(
-        "DROP INDEX IF EXISTS %s" % index_name
-    )
-
-
-def create_unique_indexes(apps, schema_editor):
-    deduplicate_global_assignments(apps, schema_editor)
-
-    if schema_editor.connection.vendor == 'postgresql':
-        _drop_index_if_exists(schema_editor, '"unique_global_user_assignment"')
-        _drop_index_if_exists(schema_editor, '"unique_global_team_assignment"')
-        schema_editor.execute(
-            'CREATE UNIQUE INDEX CONCURRENTLY "unique_global_user_assignment"'
-            ' ON "dab_rbac_roleuserassignment" ("user_id", "role_definition_id")'
-            ' WHERE "object_role_id" IS NULL'
-        )
-        schema_editor.execute(
-            'CREATE UNIQUE INDEX CONCURRENTLY "unique_global_team_assignment"'
-            ' ON "dab_rbac_roleteamassignment" ("team_id", "role_definition_id")'
-            ' WHERE "object_role_id" IS NULL'
-        )
-    else:
-        schema_editor.execute('DROP INDEX IF EXISTS "unique_global_user_assignment"')
-        schema_editor.execute('DROP INDEX IF EXISTS "unique_global_team_assignment"')
-        schema_editor.execute(
-            'CREATE UNIQUE INDEX "unique_global_user_assignment"'
-            ' ON "dab_rbac_roleuserassignment" ("user_id", "role_definition_id")'
-            ' WHERE "object_role_id" IS NULL'
-        )
-        schema_editor.execute(
-            'CREATE UNIQUE INDEX "unique_global_team_assignment"'
-            ' ON "dab_rbac_roleteamassignment" ("team_id", "role_definition_id")'
-            ' WHERE "object_role_id" IS NULL'
-        )
-
-
-def drop_unique_indexes(apps, schema_editor):
-    if schema_editor.connection.vendor == 'postgresql':
-        schema_editor.execute('DROP INDEX CONCURRENTLY IF EXISTS "unique_global_user_assignment"')
-        schema_editor.execute('DROP INDEX CONCURRENTLY IF EXISTS "unique_global_team_assignment"')
-    else:
-        schema_editor.execute('DROP INDEX IF EXISTS "unique_global_user_assignment"')
-        schema_editor.execute('DROP INDEX IF EXISTS "unique_global_team_assignment"')
-
-
 class Migration(migrations.Migration):
-
-    atomic = False
 
     dependencies = [
         ('dab_rbac', '0008_remote_permissions_cleanup'),
     ]
 
     operations = [
-        migrations.SeparateDatabaseAndState(
-            database_operations=[
-                migrations.RunPython(create_unique_indexes, drop_unique_indexes),
-            ],
-            state_operations=[
-                migrations.AddConstraint(
-                    model_name='roleuserassignment',
-                    constraint=models.UniqueConstraint(
-                        fields=['user', 'role_definition'],
-                        condition=models.Q(object_role__isnull=True),
-                        name='unique_global_user_assignment',
-                    ),
-                ),
-                migrations.AddConstraint(
-                    model_name='roleteamassignment',
-                    constraint=models.UniqueConstraint(
-                        fields=['team', 'role_definition'],
-                        condition=models.Q(object_role__isnull=True),
-                        name='unique_global_team_assignment',
-                    ),
-                ),
-            ],
-        ),
+        migrations.RunPython(deduplicate_global_assignments, migrations.RunPython.noop),
     ]
